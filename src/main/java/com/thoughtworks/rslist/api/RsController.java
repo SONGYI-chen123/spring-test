@@ -22,8 +22,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 @RestController
@@ -34,23 +37,21 @@ public class RsController {
   @Autowired RsService rsService;
 
   @GetMapping("/rs/list")
-  public ResponseEntity<List<RsEvent>> getRsEventListBetween(
+  public ResponseEntity<List<RsEventDto>> getRsEventListBetween(
       @RequestParam(required = false) Integer start, @RequestParam(required = false) Integer end) {
-    List<RsEvent> rsEvents =
-        rsEventRepository.findAll().stream()
-            .map(
-                item ->
-                    RsEvent.builder()
-                        .eventName(item.getEventName())
-                        .keyword(item.getKeyword())
-                        .userId(item.getId())
-                        .voteNum(item.getVoteNum())
-                        .build())
-            .collect(Collectors.toList());
+    List<RsEventDto> rsEventDtos = rsEventRepository.findAll();
+    List<RsEventDto> sortRsEventDtos =  SortRsEvent(rsEventDtos);
     if (start == null || end == null) {
-      return ResponseEntity.ok(rsEvents);
+      return ResponseEntity.ok(sortRsEventDtos);
     }
-    return ResponseEntity.ok(rsEvents.subList(start - 1, end));
+
+    List<RsEventDto> resultRsEventDtos = new ArrayList<>();
+    for (int i=start-1;i<end;i++){
+      resultRsEventDtos.add(sortRsEventDtos.get(i));
+    }
+
+
+    return ResponseEntity.ok(resultRsEventDtos);
   }
 
   @GetMapping("/rs/{index}")
@@ -83,6 +84,8 @@ public class RsController {
             .keyword(rsEvent.getKeyword())
             .eventName(rsEvent.getEventName())
             .voteNum(0)
+             .rank(0)
+             .amount(0)
             .user(userDto.get())
             .build();
     rsEventRepository.save(build);
@@ -107,5 +110,47 @@ public class RsController {
     Error error = new Error();
     error.setError(e.getMessage());
     return ResponseEntity.badRequest().body(error);
+  }
+
+  public List<RsEventDto> SortRsEvent(List<RsEventDto> rsEventDtos){
+    List<RsEventDto> sortRsEventDot = new ArrayList<>();
+    Collections.sort(rsEventDtos,new Comparator<RsEventDto>(){
+      @Override
+      public int compare(RsEventDto rsEventDto1,RsEventDto rsEventDto2){
+        if(rsEventDto1.getVoteNum() >= rsEventDto2.getVoteNum()){
+          return -1;
+        }else {
+          return 1;
+        }
+      }
+    });
+    for(int i=0;i<rsEventDtos.size();i++){
+      if(rsEventDtos.get(i).getRank()!=0 && rsEventDtos.get(i).getRank()<(i+1)){
+        RsEventDto changeRsEventDto = rsEventDtos.get(i);
+        for(int j=i;j>=(rsEventDtos.get(i).getRank()-1);j--){
+          rsEventDtos.get(j).builder().eventName(rsEventDtos.get(j-1).getEventName())
+                  .keyword(rsEventDtos.get(j-1).getKeyword())
+                  .amount(rsEventDtos.get(j-1).getAmount())
+                  .rank(rsEventDtos.get(j-1).getRank())
+                  .voteNum(rsEventDtos.get(j-1).getVoteNum())
+                  .id(rsEventDtos.get(j-1).getId())
+                  .user(rsEventDtos.get(j-1).getUser())
+                  .tradeDtos(rsEventDtos.get(j-1).getTradeDtos())
+                  .build();
+
+        }
+        rsEventDtos.get(changeRsEventDto.getRank()-1).builder().eventName(changeRsEventDto.getEventName())
+                .keyword(changeRsEventDto.getKeyword())
+                .amount(changeRsEventDto.getAmount())
+                .rank(changeRsEventDto.getRank())
+                .voteNum(changeRsEventDto.getVoteNum())
+                .id(changeRsEventDto.getId())
+                .user(changeRsEventDto.getUser())
+                .tradeDtos(changeRsEventDto.getTradeDtos())
+                .build();
+
+      }
+    }
+    return rsEventDtos;
   }
 }
